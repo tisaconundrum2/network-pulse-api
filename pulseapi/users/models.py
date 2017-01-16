@@ -46,6 +46,16 @@ class EmailUser(AbstractBaseUser):
     # Is this user a valid Django administrator?
     is_staff = models.BooleanField(default=False)
 
+    # "user X favorited entry Y" is a many to many relation,
+    # for which we also want to know *when* a user favorited
+    # a specific entry. As such, we use a helper class that
+    # tracks this relation as well as the time it's created.
+    favorites = models.ManyToManyField(
+        'entries.Entry',
+        through='UserFavorites',
+        related_name='favorite_by'
+    )
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['name']
 
@@ -74,3 +84,26 @@ class EmailUser(AbstractBaseUser):
 
     def has_module_perms(self, app_label):
         return True
+
+
+class UserFavorites(models.Model):
+    """
+    This class is used to link users and entries through a
+    "favorite" relation. One user can favorite many entries,
+    and one entry can have favorites from many users.
+    """
+    entry = models.ForeignKey(
+        'entries.Entry',
+        on_delete=models.CASCADE,
+        related_name='favorited_by'
+    )
+
+    user = models.ForeignKey(
+        EmailUser,
+        on_delete=models.CASCADE,
+        related_name='favorite_entries'
+    )
+
+    timestamp = models.DateTimeField(
+        auto_now=True,
+    )

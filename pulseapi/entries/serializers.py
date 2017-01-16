@@ -15,6 +15,13 @@ from pulseapi.issues.models import(
 from pulseapi.creators.models import(
     Creator
 )
+from pulseapi.users.models import(
+    EmailUser,
+    UserFavorites
+)
+from pulseapi.users.serializers import(
+    UserFavoritesSerializer
+)
 
 class CreatableSlugRelatedField(serializers.SlugRelatedField):
     """
@@ -45,6 +52,35 @@ class EntrySerializer(serializers.ModelSerializer):
     issues = serializers.SlugRelatedField(many=True,
                                           slug_field='name',
                                           queryset=Issue.objects)
+
+    creators = CreatableSlugRelatedField(many=True,
+                                         slug_field='name',
+                                         queryset=Creator.objects)
+
+    favorite_count = serializers.SerializerMethodField()
+
+    def get_favorite_count(self, instance):
+        """
+        Get the total number of faves this entry received
+        """
+        return instance.favorited_by.count()
+
+    is_favorite = serializers.SerializerMethodField()
+
+    def get_is_favorite(self, instance):
+        """
+        Check whether the current user has favorited this
+        Entry. Anonymous users always see False
+        """
+        request = self.context['request']
+
+        if hasattr(request, 'user'):
+            user = request.user
+            if user.is_authenticated():
+                res = instance.favorited_by.filter(user=user)
+                return res.count() > 0
+
+        return False
 
     creators = CreatableSlugRelatedField(many=True,
                                          slug_field='name',

@@ -2,6 +2,7 @@ import json
 
 from django.core.urlresolvers import reverse
 
+from pulseapi.entries.models import Entry
 from pulseapi.tests import PulseTestCase
 
 
@@ -159,3 +160,36 @@ class TestEntryView(PulseTestCase):
             'internal_notes': 'Some internal notes'
         })
         self.assertEqual(postresponse.status_code, 400)
+
+    def test_put_favorite_entry_without_login(self):
+        """
+        Verify that anonymous users cannot favorite entries.
+        """
+        self.client.logout();
+        postresponse = self.client.put('/entries/1/favorite')
+        self.assertEqual(postresponse.status_code, 403)
+
+        # verify fave count is zero
+        entry = Entry.objects.get(id=1)
+        faved = entry.favorited_by.count()
+        self.assertEqual(faved, 0)
+
+    def test_put_favorite_entry_with_login(self):
+        """
+        Verify that authenticated users can (un)favorite an entry.
+        """
+        postresponse = self.client.put('/entries/1/favorite')
+        self.assertEqual(postresponse.status_code, 204)
+
+        # verify fave count is now one
+        entry = Entry.objects.get(id=1)
+        faved = entry.favorited_by.count()
+        self.assertEqual(faved, 1)
+
+        # put again, which should clear the favorite flag for this user
+        postresponse = self.client.put('/entries/1/favorite')
+        self.assertEqual(postresponse.status_code, 204)
+
+        # verify fave count is now zero
+        faved = entry.favorited_by.count()
+        self.assertEqual(faved, 0)

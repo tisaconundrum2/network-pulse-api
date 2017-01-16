@@ -4,13 +4,48 @@ Views to get entries
 
 import django_filters
 from rest_framework import (filters, status)
-from rest_framework.decorators import detail_route
+from rest_framework.decorators import detail_route, api_view
 from rest_framework.generics import ListCreateAPIView, RetrieveAPIView
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from pulseapi.entries.models import Entry
 from pulseapi.entries.serializers import EntrySerializer
+from pulseapi.users.models import UserFavorites
+
+@api_view(['PUT'])
+def toggle_favorite(request, entryid):
+    """
+    Toggle whether or not this used "faves" the url-indicated entry.
+    This is currently defined outside of the entry class, as functionality
+    that is technically independent of entries themselves. We might
+    change this in the future.
+    """
+    user = request.user
+
+    if user.is_authenticated():
+        entry = None
+
+        # find the entry for this id
+        try:
+            entry = Entry.objects.get(id=entryid)
+        except Entry.DoesNotExist:
+            return Response("No such entry", status=status.HTTP_404_NOT_FOUND)
+
+        # find is there is already a {user,entry,(timestamp)} triple
+        faved = entry.favorited_by.filter(user=user)
+        exists = faved.count() > 0
+
+        # if there is a fave rule, remove it. Otherwise, make one.
+        if exists:
+            for fentry in faved:
+                fentry.delete()
+        else:
+            fave = UserFavorites(entry=entry, user=user)
+            fave.save()
+
+        return Response("Toggled favorite.", status=status.HTTP_204_NO_CONTENT)
+    return Response("Anonymous favoriting not allowed.", status=status.HTTP_403_FORBIDDEN)
 
 def post_validate(request):
     """
@@ -21,8 +56,8 @@ def post_validate(request):
     nonce = False
 
     if request.data:
-        csrf_token = request.data['csrfmiddlewaretoken']
-        nonce = request.data['nonce']
+        csrf_token = request.data.get('csrfmiddlewaretoken', False)
+        nonce = request.data.get('nonce', False)
     else:
         csrf_token = request.POST.get('csrfmiddlewaretoken', False)
         nonce = request.POST.get('nonce', False)
